@@ -1,6 +1,7 @@
 #include <queue>
 #include <condition_variable>
 #include <memory>
+#include <atomic>
 #include <mutex>
 #include <utility>
 
@@ -13,6 +14,7 @@ class threadsafe_queue {
     std::queue<T> q;
     mutable std::mutex mt;
     std::condition_variable cv;
+    std::atomic<bool> closed{false};
     using guard_type = std::lock_guard<std::mutex>;
 public:
     threadsafe_queue()=default;
@@ -50,16 +52,19 @@ public:
         return res;
     }
 
-    void wait_and_pop(T& res) {
+    bool wait_and_pop(T& res) {
         std::unique_lock<std::mutex> uq(mt);
-        cv.wait(uq, [this](){return !q.empty();}); 
+        cv.wait(uq, [this](){return closed || !q.empty();}); 
+        if(closed) return false;
         res = std::move(q.front());
         q.pop();
+        return true;
     }
 
     std::shared_ptr<T> wait_and_pop() {
         std::unique_lock<std::mutex> uq(mt);
-        cv.wait(uq, [this](){return !q.empty();});
+        cv.wait(uq, [this](){return closed || !q.empty();});
+        if(closed) return nullptr;
         std::shared_ptr<T> const res(
             std::make_shared<T>(std::move(q.front()))
         );
@@ -70,6 +75,11 @@ public:
     bool empty() const {
         guard_type guard(mt);
         return q.empty();
+    }
+
+    void close() {
+        closed = true;
+        cv.notify_all();
     }
 
 };
