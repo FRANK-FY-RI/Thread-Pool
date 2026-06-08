@@ -1,18 +1,19 @@
 #include "threadsafe_queue.hpp"
+#include "function_wrapper.hpp"
 #include <future>
 #include <vector>
 #include <thread>
 #include <functional>
 
 class threadpool {
-    threadsafe_queue<std::packaged_task<void()>> q;
+    threadsafe_queue<function_wrapper> q;
     std::vector<std::thread> threads;
     std::atomic<bool> done;
     unsigned int n_threads;
 
     void thread_work() {
         while(!done) {
-            std::packaged_task<void()> task;
+            function_wrapper task;
             if(q.try_pop(task)) task();
             else std::this_thread::yield(); 
         }
@@ -30,7 +31,8 @@ public:
     
     template <typename func>
     auto submit(func&& f) {
-        std::packaged_task<void()> task(f);
+        using result_type = std::invoke_result_t<func>;
+        std::packaged_task<result_type()> task(std::move(f));
         auto fut = task.get_future();
         q.push(std::move(task));
         return fut;
