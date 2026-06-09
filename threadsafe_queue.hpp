@@ -1,3 +1,6 @@
+#ifndef __THREADSAFE_QUEUE
+#define __THREADSAFE_QUEUE
+
 #include <queue>
 #include <condition_variable>
 #include <memory>
@@ -83,3 +86,6 @@ public:
     }
 
 };
+
+
+#endif

@@ -1,3 +1,6 @@
+#ifndef __THREADPOOL_HPP
+#define __THREADPOOL_HPP
+
 #include "threadsafe_queue.hpp"
 #include "function_wrapper.hpp"
 #include <future>
@@ -41,3 +44,6 @@ public:
         for(auto &it:threads) it.join();
     }
 };
+
+
+#endif

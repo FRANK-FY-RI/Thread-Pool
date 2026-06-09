@@ -1,3 +1,6 @@
+#ifndef __FUNCTION_WRAPPER
+#define __FUNCTION_WRAPPER
+
 #include <memory>
 
 class function_wrapper {
@@ -45,3 +48,6 @@ public:
         ptr->call();
     }
 };
+
+
+#endif
