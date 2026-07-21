@@ -6,16 +6,17 @@ A lightweight thread pool implementation built while learning C++ concurrency.
 
 - Fixed-size worker thread pool
 - Task submission using `std::future`
-- Blocking task queue using `std::condition_variable`
+- Dual-lock blocking MPMC task queue
 - Move-only task support via custom `function_wrapper`
-- Graceful shutdown and thread joining
+- Worker threads exit cleanly on shutdown
+- Pending tasks remaining in the queue are discarded during destruction
 
 ## Structure
 
 ```text
 .
 ├── threadpool.hpp          # Thread pool implementation
-├── threadsafe_queue.hpp    # Lock-based blocking queue
+├── threadsafe_queue.hpp    # Dual-lock MPMC queue
 └── function_wrapper.hpp    # Move-only callable wrapper
 ```
 ## How to use
@@ -33,6 +34,9 @@ Use std::bind or a lambda to capture any required arguments.
 std::cout << fut.get() << '\n';
 ```
 
+### Shutdown Semantics
+Destroying the thread pool signals all worker threads to stop. Any tasks still waiting in the queue are discarded, while tasks already being executed are allowed to finish before the worker threads exit.
+
 ## Performance Evaluation
 
 The thread pool was benchmarked against several execution strategies using a parallel accumulation workload across varying input sizes.
@@ -41,30 +45,31 @@ The thread pool was benchmarked against several execution strategies using a par
 
 - Sequential
 - Thread Spawn
-- Busy-Wait Pool
-- Blocking Pool
+- Single-Lock Busy-Wait Pool
+- Single-Lock Blocking Pool
+- Dual-Lock Busy-Wait Pool
+- Dual-Lock Blocking Pool
 
 ### Results
 
-![Runtime Scaling](runtime_scaling.png)
+![Runtime Scaling](benchmark/runtime_scaling.png)
 
 The benchmark shows that:
 
 - Thread creation overhead dominates for small workloads.
 - Reusing worker threads is significantly more efficient than spawning threads repeatedly.
-- The blocking pool performs similarly to the busy-wait pool while avoiding unnecessary CPU consumption when idle.
-- As workload size increases, the thread pool scales substantially better than the thread-per-task approach.
-- Queue synchronization overhead becomes the primary bottleneck at larger scales.
+- The dual-lock queue reduces contention between producers and consumers, improving throughput over the single-lock implementation.
+- The dual-lock busy-wait pool consistently achieves the lowest runtime among all thread-pool variants.
+- Blocking implementations provide comparable performance while avoiding unnecessary CPU utilization when idle.
+- As task size increases, synchronization overhead becomes negligible compared to the computation itself, causing all thread-pool variants to converge.
 
 ### Key Observation
 
-Although busy-waiting can reduce wake-up latency, it continuously consumes CPU cycles while waiting for work. The blocking pool suspends idle worker threads using condition variables, eliminating unnecessary CPU usage. In the benchmark, the blocking pool eventually matches and slightly outperforms the busy-wait implementation while remaining significantly more resource-efficient.
+The dual-lock queue reduces producer-consumer contention, resulting in consistently lower synchronization overhead than the single-lock design. Additionally, while busy-waiting achieves the lowest runtime by avoiding wake-up latency, the blocking implementation delivers comparable performance for larger workloads without consuming CPU resources when idle.
 
 ## Current Limitations
-- Queue uses a single mutex for all operations.
 - No work stealing.
 - No dynamic thread management.
-- No task prioritization.
 - No lock-free data structures.
 
 ## Future Improvements
@@ -72,6 +77,7 @@ Although busy-waiting can reduce wake-up latency, it continuously consumes CPU c
 - Add local worker queues.
 - Implement work stealing.
 - Investigate dynamic thread management.
+- Investigate lock-free task queues.
 
 ## Requirements
 - C++17 or later
